@@ -38,10 +38,10 @@ async fn main() -> Result<()> {
     // Отримання останнього blockhash
     let latest_blockhash = connection.get_latest_blockhash()?;
     // Мінт токена
-    let token_mint_pubkey = Pubkey::from_str("9VXSQygGgFfTgB3rqN1gHUMoCeGpwUgYyJtFsaAK9zMS")
+    let token_mint_pubkey = Pubkey::from_str("3d5MK5qQsGQRkFqVmeJ1eaR2zbiH7BCh9C9TzDkj3Ztu")
         .context("Failed to parse mint address")?;
     let mint_account_pubkey =
-        Pubkey::from_str("GBTHa7gJb8BfgyqzgbCyHEiDKAEWsPpXv7QEissdWGMN")
+        Pubkey::from_str("G9HfVHM1sDw6Y3F9VwB3MqpS44JGfFkdeL73SSgCv1mU")
             .context("Failed to parse account address")?; 
 
     // Перевірка мінт акаунта
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
                 2, // Decimals
             )?;
 
-            let mut transaction = Transaction::new_signed_with_payer(
+            let transaction = Transaction::new_signed_with_payer(
                 &[create_mint_ix, initialize_mint_ix],
                 Some(&sender_keypair.pubkey()),
                 &[&sender_keypair],
@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
         amount,
     )?;
 
-    let mut transaction = Transaction::new_signed_with_payer(
+    let  transaction = Transaction::new_signed_with_payer(
         &[mint_to_instruction],
         Some(&sender_keypair.pubkey()),
         &[&sender_keypair],

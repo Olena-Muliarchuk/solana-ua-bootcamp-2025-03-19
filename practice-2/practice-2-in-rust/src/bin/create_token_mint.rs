@@ -11,10 +11,10 @@ use solana_sdk::{
 
 use spl_token_2022::{
     id as token_2022_program_id,
+    extension::{ExtensionType, metadata_pointer},
     instruction::initialize_mint,
     state::Mint,
 };
-use solana_program::program_pack::Pack;
 
 fn main() -> anyhow::Result<()> {
     from_path(".env").expect("Failed to load .env file"); 
@@ -28,11 +28,13 @@ fn main() -> anyhow::Result<()> {
     let connection = RpcClient::new("https://api.devnet.solana.com");
     let latest_blockhash = connection.get_latest_blockhash()?;
 
-    // Create token
+    //  Розрахунок розміру акаунта Mint з розширенням MetadataPointer
+    let extensions = &[ExtensionType::MetadataPointer];
+    let mint_space = ExtensionType::try_calculate_account_len::<Mint>(extensions)?;
+    let mint_rent = connection.get_minimum_balance_for_rent_exemption(mint_space)?;
+
     let decimals = 2;
     let mint_account = Keypair::new();
-    let mint_space =  <Mint as Pack>::LEN;
-    let mint_rent = connection.get_minimum_balance_for_rent_exemption(mint_space)?;
 
     let create_mint_account_ix = system_instruction::create_account(
         &sender_keypair.pubkey(),
@@ -42,7 +44,29 @@ fn main() -> anyhow::Result<()> {
         &token_2022_program_id(),
     );
 
-    let create_token_mint_ix = initialize_mint(
+    let mut tx1 = Transaction::new_with_payer(
+        &[create_mint_account_ix],
+        Some(&sender_keypair.pubkey()),
+    );
+    tx1.sign(&[&sender_keypair, &mint_account], latest_blockhash);
+    connection.send_and_confirm_transaction(&tx1)?;
+    println!(" Mint account created: {}", mint_account.pubkey());
+
+    let metadata_ix = metadata_pointer::instruction::initialize(
+        &token_2022_program_id(),
+        &mint_account.pubkey(),
+        Some(sender_keypair.pubkey()),
+        Some(mint_account.pubkey()),
+    )?;
+
+    let mut tx2 = Transaction::new_with_payer(
+        &[metadata_ix],
+        Some(&sender_keypair.pubkey()),
+    );
+    tx2.sign(&[&sender_keypair], latest_blockhash);
+    connection.send_and_confirm_transaction(&tx2)?;
+    println!("MetadataPointer initialized");
+    let mint_ix = initialize_mint(
         &token_2022_program_id(),
         &mint_account.pubkey(),
         &sender_keypair.pubkey(),
@@ -50,17 +74,14 @@ fn main() -> anyhow::Result<()> {
         decimals,
     )?;
 
-    let mut transaction = Transaction::new_with_payer(
-        &[create_mint_account_ix, create_token_mint_ix],
+    let mut tx3 = Transaction::new_with_payer(
+        &[mint_ix],
         Some(&sender_keypair.pubkey()),
     );
-
-    transaction.sign(&[&sender_keypair, &mint_account], latest_blockhash);
-
-    let signature = connection.send_and_confirm_transaction(&transaction)?;
-
-    println!(" Token Mint created successfully! Mint address: {}", mint_account.pubkey());
-    println!("Transaction signature: {}", signature);
+    tx3.sign(&[&sender_keypair], latest_blockhash);
+    let sig = connection.send_and_confirm_transaction(&tx3)?;
+    println!("Mint initialized with decimals=2");
+    println!(" Final Transaction Signature: {}", sig);
 
     Ok(())
 }
