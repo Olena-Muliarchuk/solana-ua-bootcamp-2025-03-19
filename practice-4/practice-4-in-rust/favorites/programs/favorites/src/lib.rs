@@ -34,6 +34,19 @@ pub struct SetFavorites<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateFavorites<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    
+    #[account(
+        mut,
+        seeds = [b"favorites", user.key().as_ref()],
+        bump,
+    )]
+    pub favorites: Account<'info, Favorites>,
+}
+
 // Accounts struct for getting favorites
 #[derive(Accounts)]
 pub struct GetFavorites<'info> {
@@ -69,6 +82,30 @@ pub mod favorites {
         Ok(())
     }
 
+    // Instruction to update the user's favorite number and/or color
+    pub fn update_favorites(context: Context<UpdateFavorites>, number: Option<u64>, color: Option<String>) ->Result<()> {
+        let favorites = &mut context.accounts.favorites;
+
+        if let Some(new_number) = number {
+            favorites.number = new_number;
+            msg!("Updated number to: {}", new_number);
+        }
+
+        if let Some(new_color) = color {
+            favorites.color = new_color.clone();
+            msg!("Updated color to: {}", new_color);
+        }
+
+        let user_public_key = context.accounts.user.key();
+        msg!(
+            "User {}'s favorite number is {} and favorite color is: {}",
+            user_public_key,
+            favorites.number,
+            favorites.color
+        );
+
+        Ok(())
+    }
     // We can also add a get_favorites instruction to get the user's favorite number and color
     pub fn get_favorites(context: Context<GetFavorites>) -> Result<Favorites> {
         let favorites = &context.accounts.favorites;

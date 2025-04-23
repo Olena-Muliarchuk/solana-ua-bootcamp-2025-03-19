@@ -2,16 +2,19 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { Favorites } from "../target/types/favorites";
 import { airdropIfRequired, getCustomErrorMessage } from "@solana-developers/helpers";
-import { expect, describe, test } from '@jest/globals';
+import { expect, describe, test, beforeEach } from '@jest/globals';
 import { systemProgramErrors } from "./system-program-errors";
 
 describe("favorites", () => {
-  // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  it("Writes our favorites to the blockchain", async () => {
-    const user = web3.Keypair.generate();
-    const program = anchor.workspace.Favorites as Program<Favorites>;
+  let program: Program<Favorites>;
+  let user: web3.Keypair;
+  let favoritesPda: web3.PublicKey;
+
+  beforeEach(async () => {
+    user = web3.Keypair.generate();
+    program = anchor.workspace.Favorites as Program<Favorites>;
 
     console.log(`User public key: ${user.publicKey}`);
 
@@ -22,43 +25,53 @@ describe("favorites", () => {
       1 * web3.LAMPORTS_PER_SOL
     );
 
-    // Here's what we want to write to the blockchain
-    const favoriteNumber = new anchor.BN(23);
-    const favoriteColor = "red";
-    // Make a transaction to write to the blockchain
-    let tx: string | null = null;
-    try {
-      tx = await program.methods
-        // Call the set_favorites instruction handler
-        .setFavorites(favoriteNumber, favoriteColor)
-        .accounts({
-          user: user.publicKey,
-          // Note that both `favorites` and `system_program` are added
-          // automatically.
-        })
-        // Sign the transaction
-        .signers([user])
-        // Send the transaction to the cluster or RPC
-        .rpc();
-    } catch (thrownObject) {
-      // Let's properly log the error, so we can see the program involved
-      // and (for well known programs) the full log message.
-
-      const rawError = thrownObject as Error;
-      throw new Error(getCustomErrorMessage(systemProgramErrors, rawError.message));
-    }
-
-    console.log(`Tx signature: ${tx}`);
-
-    // Calculate the PDA account address that holds the user's favorites
-    const [favoritesPda, _favoritesBump] = web3.PublicKey.findProgramAddressSync(
+    // PDA can be precomputed before each test
+    [favoritesPda] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("favorites"), user.publicKey.toBuffer()],
       program.programId
     );
-    // And make sure it matches!
-    const dataFromPda = await program.account.favorites.fetch(favoritesPda);
-    expect(dataFromPda.color).toEqual(favoriteColor);
-    expect(dataFromPda.number.toNumber()).toEqual(favoriteNumber.toNumber());
+  });
 
+  async function writeFavorites(number: number, color: string): Promise<string> {
+    try {
+      return await program.methods
+        .setFavorites(new anchor.BN(number), color)
+        .accounts({ user: user.publicKey })
+        .signers([user])
+        .rpc();
+    } catch (err) {
+      throw new Error(getCustomErrorMessage(systemProgramErrors, (err as Error).message));
+    }
+  }
+
+  async function updateFavorites(number: number, color: string): Promise<string> {
+    try {
+      return await program.methods
+        .updateFavorites(new anchor.BN(number), color)
+        .accounts({ user: user.publicKey })
+        .signers([user])
+        .rpc();
+    } catch (err) {
+      throw new Error(getCustomErrorMessage(systemProgramErrors, (err as Error).message));
+    }
+  }
+
+  async function expectFavoritesToMatch(color: string, number: number) {
+    const data = await program.account.favorites.fetch(favoritesPda);
+    expect(data.color).toEqual(color);
+    expect(data.number.toNumber()).toEqual(number);
+  }
+
+  test("Writes our favorites to the blockchain", async () => {
+    const tx = await writeFavorites(23, "red");
+    console.log(`Tx signature: ${tx}`);
+    await expectFavoritesToMatch("red", 23);
+  });
+
+  test("Updates our favorites on the blockchain", async () => {
+    await writeFavorites(23, "red");
+    await expectFavoritesToMatch("red", 23);
+    await updateFavorites(40, "black");
+    await expectFavoritesToMatch("black", 40);
   });
 });
