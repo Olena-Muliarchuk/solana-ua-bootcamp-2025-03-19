@@ -20,6 +20,7 @@ import { Wallet } from "@coral-xyz/anchor";
 import { OffersPage } from "@/pages/all-offers";
 import { OpenOffersPage } from "@/pages/open-offers";
 import AccountOffers from "@/pages/account-offers";
+import { CustomWalletTokensTab } from "@/pages/custom-tokens";
 import { Offer } from "@/types/offer";
 
 import { Toaster } from "sonner";
@@ -136,10 +137,11 @@ const App: React.FC = () => {
           Password: {createPass(walletAddress)}
         </h2>
         <Tabs defaultValue="orders" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="orders">All Offers</TabsTrigger>
             <TabsTrigger value="openOffers">Open Offers</TabsTrigger>
             <TabsTrigger value="accountOffers">Account Offers</TabsTrigger>
+            <TabsTrigger value="customTokens">My tokens</TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders">
@@ -168,6 +170,12 @@ const App: React.FC = () => {
               disconnect={disconnect}
               setIsWalletConnected={setIsWalletConnected}
               loading={loading}
+            />
+          </TabsContent>
+
+          <TabsContent value="customTokens">
+            <CustomWalletTokensTab
+              isWalletConnected={isWalletConnected}
             />
           </TabsContent>
 
