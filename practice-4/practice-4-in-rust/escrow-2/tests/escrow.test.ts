@@ -20,6 +20,7 @@ import {
   createMintToInstruction,
   getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptMint,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { randomBytes } from "crypto";
 
@@ -108,9 +109,9 @@ const getTokenBalanceOn = (
 ) => async (
   tokenAccountAddress: PublicKey,
 ): Promise<BN> => {
-  const tokenBalance = await connection.getTokenAccountBalance(tokenAccountAddress);
-  return new BN(tokenBalance.value.amount);
-};
+    const tokenBalance = await connection.getTokenAccountBalance(tokenAccountAddress);
+    return new BN(tokenBalance.value.amount);
+  };
 
 // Jest debug console it too verbose.
 // const jestConsole = console;
@@ -359,4 +360,53 @@ describe("escrow", () => {
     expect(await getTokenBalance(bobUsdcAccount)).toEqual(new BN(30_000_000));
     expect(await getTokenBalance(bobWifAccount)).toEqual(new BN(200_000_000));
   });
+
+  test("Alice cancels her offer, tokens returned and accounts closed", async () => {
+    const offeredAmount = new BN(500_000);
+    const wantedAmount = new BN(1_000_000);
+
+    const { offerAddress, vaultAddress } = await makeOfferTx(
+      alice,
+      offerId,
+      usdcMint.publicKey,
+      offeredAmount,
+      wifMint.publicKey,
+      wantedAmount
+    );
+
+    const getTokenBalance = getTokenBalanceOn(connection);
+    const aliceInitialBalance = await getTokenBalance(aliceUsdcAccount);
+    const vaultBalanceBefore = await getTokenBalance(vaultAddress);
+
+    expect(vaultBalanceBefore).toEqual(offeredAmount);
+
+    const transactionSignature = await program.methods
+      .cancelOffer()
+      .accounts({
+        maker: alice.publicKey,
+        offer: offerAddress,
+        vault: vaultAddress,
+        tokenMintA: usdcMint.publicKey,
+        makerTokenAccountA: aliceUsdcAccount,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .signers([alice])
+      .rpc();
+
+    await confirmTransaction(connection, transactionSignature);
+
+    // Баланс повернувся
+    const aliceFinalBalance = await getTokenBalance(aliceUsdcAccount);
+    expect(aliceFinalBalance.sub(aliceInitialBalance)).toEqual(offeredAmount);
+
+    // Перевіряємо, що акаунти закриті
+    const offerAccountInfo = await connection.getAccountInfo(offerAddress);
+    const vaultAccountInfo = await connection.getAccountInfo(vaultAddress);
+
+    expect(offerAccountInfo).toBeNull();
+    expect(vaultAccountInfo).toBeNull();
+  });
+
 });

@@ -6,8 +6,13 @@ pub mod state;
 use anchor_lang::prelude::*;
 
 pub use constants::*;
-pub use instructions::*;
 pub use state::*;
+
+use instructions::{
+    cancel_offer::*, 
+    make_offer::*, 
+    take_offer::*
+};
 
 declare_id!("87s8jsU1EEeufgewvpgFnxZRUZ8YE3YogXJsNmSbet28");
 
@@ -28,5 +33,9 @@ pub mod escrow {
     pub fn take_offer(context: Context<TakeOffer>) -> Result<()> {
         instructions::take_offer::send_wanted_tokens_to_maker(&context)?;
         instructions::take_offer::withdraw_and_close_vault(context)
+    }
+
+    pub fn cancel_offer(context: Context<CancelOffer>) -> Result<()> {
+        instructions::cancel_offer::cancel_offer(context)
     }
 }
